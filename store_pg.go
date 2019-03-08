@@ -51,7 +51,9 @@ func (pg *postgresStore) FindBenchmark(ctx context.Context, benchID int64) (*Ben
 func (pg *postgresStore) ListBenchmarks(ctx context.Context, olderThan time.Time, limit int) ([]*Benchmark, error) {
 	rows, err := pg.db.QueryContext(ctx, `
 		SELECT id, created, content FROM benchmarks
-		WHERE created < $1 LIMIT $2
+		WHERE created < $1
+		ORDER BY created DESC
+		LIMIT $2
 	`, olderThan, limit)
 	if err != nil {
 		return nil, fmt.Errorf("cannot query benchmarks: %s", err)

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -44,6 +45,37 @@ func signed(sig string, content []byte, secret string) bool {
 	// knows the secret.
 
 	return true
+}
+
+func showBenchmark(store Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		benchID, _ := strconv.ParseInt(lastChunk(r.URL.Path), 10, 64)
+		if benchID == 0 {
+			httpFailf(w, http.StatusNotFound, "benchmark not found")
+			return
+		}
+
+		switch bench, err := store.FindBenchmark(r.Context(), benchID); err {
+		case nil:
+			io.WriteString(w, bench.Content)
+		case ErrNotFound:
+			httpFailf(w, http.StatusNotFound, "benchmark not found")
+		default:
+			httpFailf(w, http.StatusInternalServerError, err.Error())
+		}
+	}
+}
+
+func lastChunk(path string) string {
+	if path[len(path)-1] == '/' {
+		path = path[:len(path)-1]
+	}
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' {
+			return path[i+1:]
+		}
+	}
+	return path
 }
 
 func listHandler(store Store) http.HandlerFunc {
@@ -114,10 +146,14 @@ var tmpl = template.Must(template.New("").Parse(`
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-	*            { box-sizing: border-box; }
-	html         { position: relative; min-height: 100%; margin: 20px; }
-	body         { margin: 40px auto 120px auto; max-width: 50em; line-height: 28px; }
-	.error       { background: #fce8f3; border: 1px solid #fcbfe2; padding: 10px 20px; border-radius: 3px; }
+	*              { box-sizing: border-box; }
+	html           { position: relative; min-height: 100%; margin: 20px; width: 100%; max-width: 800px; margin: 20px auto; }
+	body           { margin: 40px auto 120px auto; max-width: 50em; line-height: 28px; }
+	.error         { background: #fce8f3; border: 1px solid #fcbfe2; padding: 10px 20px; border-radius: 3px; }
+	table          { min-width: 80%; }
+	table thead    { font-weight: bolder; }
+	table tbody td { border-top: 1px solid #e0e0e0; padding: 3px 5px; }
+	button         { margin-top: 30px; }
 </style>
 {{ end}}
 
@@ -131,20 +167,28 @@ var tmpl = template.Must(template.New("").Parse(`
 	{{if .}}
 		<form action="/compare/" method="GET">
 			<table>
-			<tr>
-				<td>ID</td>
-				<td>Compare</td>
-				<td>Created</td>
-			</tr>
-			{{range .}}
+			<thead>
 				<tr>
-					<td>{{.ID}}</td>
-					<td>
-						<input type="radio" name="a" value="{{.ID}}">
-						<input type="radio" name="b" value="{{.ID}}">
-					</td>
-					<td>{{.Created}}</td>
+					<td>ID</td>
+					<td>Compare</td>
+					<td>Created</td>
 				</tr>
+			</thead>
+			{{range .}}
+				<tbody>
+					<tr>
+						<td>
+							<a href="/benchmarks/{{.ID}}">
+								#{{.ID}}
+							</a>
+						</td>
+						<td>
+							<input type="radio" name="a" value="{{.ID}}">
+							<input type="radio" name="b" value="{{.ID}}">
+						</td>
+						<td>{{.Created.Format "Mon, 2 Jan 15:04"}}</td>
+					</tr>
+				</tbody>
 			{{end}}
 			</table>
 			<button type="submit">Compare</button>

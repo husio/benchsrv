@@ -45,6 +45,7 @@ func run(conf configuration) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", listHandler(store))
+	mux.Handle("/benchmarks/", showBenchmark(store))
 	mux.Handle("/compare/", compareHandler(store))
 	mux.Handle("/upload/", uploadHandler(store, conf.Secret))
 
