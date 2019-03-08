@@ -53,10 +53,7 @@ func listHandler(store Store) http.HandlerFunc {
 			httpFailf(w, http.StatusInternalServerError, "cannot list benchmarks: %s", err)
 			return
 		}
-		// TODO render template instead
-		for _, b := range benchmarks {
-			fmt.Fprintf(w, "%d\t%s\n", b.ID, b.Created)
-		}
+		tmpl.ExecuteTemplate(w, "listing", benchmarks)
 	}
 }
 
@@ -120,11 +117,40 @@ var tmpl = template.Must(template.New("").Parse(`
 	*            { box-sizing: border-box; }
 	html         { position: relative; min-height: 100%; margin: 20px; }
 	body         { margin: 40px auto 120px auto; max-width: 50em; line-height: 28px; }
+	.error       { background: #fce8f3; border: 1px solid #fcbfe2; padding: 10px 20px; border-radius: 3px; }
 </style>
 {{ end}}
 
 {{define "error"}}
-{{template "header" .}}
+	{{template "header" .}}
 	<div class="error">{{.}}</div>
+{{end}}
+
+{{define "listing"}}
+	{{template "header" .}}
+	{{if .}}
+		<form action="/compare/" method="GET">
+			<table>
+			<tr>
+				<td>ID</td>
+				<td>Compare</td>
+				<td>Created</td>
+			</tr>
+			{{range .}}
+				<tr>
+					<td>{{.ID}}</td>
+					<td>
+						<input type="radio" name="a" value="{{.ID}}">
+						<input type="radio" name="b" value="{{.ID}}">
+					</td>
+					<td>{{.Created}}</td>
+				</tr>
+			{{end}}
+			</table>
+			<button type="submit">Compare</button>
+		</form>
+	{{else}}
+		<div class="error">No benchmarks.</div>
+	{{end}}
 {{end}}
 `))
