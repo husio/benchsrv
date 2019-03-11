@@ -9,7 +9,7 @@ import (
 type Store interface {
 	// CreateBenchmark creates and stores a new instance of a benchmark.
 	// Newly create benchmark ID is returned on success.
-	CreateBenchmark(ctx context.Context, benchmarkContent string) (int64, error)
+	CreateBenchmark(ctx context.Context, content, commit string) (int64, error)
 
 	// FindBenchmark returns a benchmark instance with given ID. If not
 	// found ErrNotFound is returned instead.
@@ -32,6 +32,9 @@ type Benchmark struct {
 
 	// Content represents the output result of a single benchmark run.
 	Content string
+
+	// Commit ID that this benchmark was runnig for.
+	Commit string
 }
 
 var ErrNotFound = errors.New("not found")

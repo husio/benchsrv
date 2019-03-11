@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -20,11 +21,12 @@ func NewPostgresStore(db *sql.DB) (Store, error) {
 	return &postgresStore{db: db}, nil
 }
 
-func (pg *postgresStore) CreateBenchmark(ctx context.Context, content string) (int64, error) {
+func (pg *postgresStore) CreateBenchmark(ctx context.Context, content, commit string) (int64, error) {
 	res := pg.db.QueryRowContext(ctx, `
-		INSERT INTO benchmarks (created, content) VALUES ($1, $2)
+		INSERT INTO benchmarks (created, content, commit)
+		VALUES ($1, $2, $3)
 		RETURNING id
-	`, time.Now(), content)
+	`, time.Now(), content, commit)
 
 	var id int64
 	err := res.Scan(&id)
@@ -33,12 +35,12 @@ func (pg *postgresStore) CreateBenchmark(ctx context.Context, content string) (i
 
 func (pg *postgresStore) FindBenchmark(ctx context.Context, benchID int64) (*Benchmark, error) {
 	res := pg.db.QueryRowContext(ctx, `
-		SELECT created, content FROM benchmarks
+		SELECT created, content, commit FROM benchmarks
 		WHERE id = $1 LIMIT 1
 	`, benchID)
 
 	var b Benchmark
-	switch err := res.Scan(&b.Created, &b.Content); err {
+	switch err := res.Scan(&b.Created, &b.Content, &b.Commit); err {
 	case sql.ErrNoRows:
 		return nil, ErrNotFound
 	case nil:
@@ -50,7 +52,7 @@ func (pg *postgresStore) FindBenchmark(ctx context.Context, benchID int64) (*Ben
 
 func (pg *postgresStore) ListBenchmarks(ctx context.Context, olderThan time.Time, limit int) ([]*Benchmark, error) {
 	rows, err := pg.db.QueryContext(ctx, `
-		SELECT id, created, content FROM benchmarks
+		SELECT id, created, content, commit FROM benchmarks
 		WHERE created < $1
 		ORDER BY created DESC
 		LIMIT $2
@@ -63,7 +65,7 @@ func (pg *postgresStore) ListBenchmarks(ctx context.Context, olderThan time.Time
 	results := make([]*Benchmark, 0, limit)
 	for rows.Next() {
 		var b Benchmark
-		if err := rows.Scan(&b.ID, &b.Created, &b.Content); err != nil {
+		if err := rows.Scan(&b.ID, &b.Created, &b.Content, &b.Commit); err != nil {
 			return nil, fmt.Errorf("cannot scan result: %s", err)
 		}
 		results = append(results, &b)
@@ -73,8 +75,12 @@ func (pg *postgresStore) ListBenchmarks(ctx context.Context, olderThan time.Time
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(schema)
-	return err
+	for _, query := range strings.Split(schema, "\n---\n") {
+		if _, err := db.Exec(schema); err != nil {
+			return fmt.Errorf("%s: %s", err, query)
+		}
+	}
+	return nil
 }
 
 const schema = `
@@ -83,4 +89,8 @@ CREATE TABLE IF NOT EXISTS benchmarks (
 	created TIMESTAMPTZ NOT NULL,
 	content TEXT NOT NULL
 );
+
+---
+
+ALTER TABLE benchmarks ADD COLUMN IF NOT EXISTS commit TEXT NOT NULL;
 `

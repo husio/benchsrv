@@ -41,6 +41,8 @@ func run(conf configuration) error {
 		if err != nil {
 			return fmt.Errorf("new postgres store: %s", err)
 		}
+	} else {
+		log.Print("using an in memory storage")
 	}
 
 	mux := http.NewServeMux()

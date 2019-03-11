@@ -16,7 +16,7 @@ type memstore struct {
 	mem []*Benchmark
 }
 
-func (s *memstore) CreateBenchmark(ctx context.Context, content string) (int64, error) {
+func (s *memstore) CreateBenchmark(ctx context.Context, content, commit string) (int64, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -24,6 +24,7 @@ func (s *memstore) CreateBenchmark(ctx context.Context, content string) (int64, 
 		ID:      int64(len(s.mem)) + 1,
 		Created: time.Now(),
 		Content: content,
+		Commit:  commit,
 	}
 	s.mem = append(s.mem, bench)
 	return bench.ID, nil

@@ -1,21 +1,41 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
 func uploadHandler(store Store, secret string) http.HandlerFunc {
+	const oneMB = 1e6
 	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseMultipartForm(oneMB); err != nil {
+			httpFailf(w, http.StatusBadRequest, "parse: %s", err)
+			return
+		}
 
-		content, err := ioutil.ReadAll(r.Body)
+		fd, _, err := r.FormFile("content")
+		defer fd.Close()
+		content, err := ioutil.ReadAll(fd)
 		if err != nil {
-			httpFailf(w, http.StatusBadRequest, "cannot read body: %s", err)
+			httpFailf(w, http.StatusBadRequest, "read content: %s", err)
+			return
+		}
+		content = bytes.TrimSpace(content)
+		if len(content) == 0 {
+			httpFailf(w, http.StatusBadRequest, "content is required")
+			return
+		}
+
+		commit := strings.TrimSpace(r.Form.Get("commit"))
+		if commit == "" {
+			httpFailf(w, http.StatusBadRequest, "commit is required")
 			return
 		}
 
@@ -29,7 +49,7 @@ func uploadHandler(store Store, secret string) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		benchID, err := store.CreateBenchmark(r.Context(), string(content))
+		benchID, err := store.CreateBenchmark(r.Context(), string(content), commit)
 		if err != nil {
 			httpFailf(w, http.StatusInternalServerError, "cannot upload: %s", err)
 			return
@@ -172,6 +192,7 @@ var tmpl = template.Must(template.New("").Parse(`
 					<td>ID</td>
 					<td>Compare</td>
 					<td>Created</td>
+					<td>Commit</td>
 				</tr>
 			</thead>
 			{{range .}}
@@ -187,6 +208,7 @@ var tmpl = template.Must(template.New("").Parse(`
 							<input type="radio" name="b" value="{{.ID}}">
 						</td>
 						<td>{{.Created.Format "Mon, 2 Jan 15:04"}}</td>
+						<td>{{.Commit}}</td>
 					</tr>
 				</tbody>
 			{{end}}
